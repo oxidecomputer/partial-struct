@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+// Copyright 2023 Oxide Computer Company
+
 use partial_struct::partial;
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +51,7 @@ fn test_multiple_commands() {
 
     let _ = OldStruct { f1: false };
 
-    let _ = NewStruct1 { };
+    let _ = NewStruct1 {};
 }
 
 #[test]

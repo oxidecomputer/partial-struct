@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+// Copyright 2023 Oxide Computer Company
+
 extern crate proc_macro;
 #[macro_use]
 extern crate quote;
@@ -7,8 +13,8 @@ use proc_macro2::Group;
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
-    DeriveInput, Ident, Result, Token, Type,
-    spanned::Spanned, Error,
+    spanned::Spanned,
+    DeriveInput, Error, Ident, Result, Token, Type,
 };
 
 /// Optional commands that can be define on a per field level. Commands are paired with the
@@ -41,30 +47,27 @@ impl Parse for FieldCommands {
             if command == "skip" {
                 skip = true;
             } else if command == "retype" {
-
                 // If a retype command has already been found, return an error on the second one
                 if retype.is_some() {
-                    return Err(Error::new(command.span(), "Only a single retype command is allowed per field"));
+                    return Err(Error::new(
+                        command.span(),
+                        "Only a single retype command is allowed per field",
+                    ));
                 }
 
                 let _: Token![=] = content.parse()?;
                 let new_type: Type = content.parse()?;
                 retype = Some(new_type);
             } else {
-                return Err(Error::new(command.span(), format!("Unknown command: {}", command)));
+                return Err(Error::new(
+                    command.span(),
+                    format!("Unknown command: {}", command),
+                ));
             }
 
             // Parse an optional comma following each trait
             let _: Result<Token![,]> = content.parse();
         }
-
-        // Invalid or unknown commands are currently ignored. They likely will be upgraded to
-        // to errors in the future
-        // let commands: Punctuated<Ident, Token![,]> = content.parse_terminated(Ident::parse)?;
-
-        // panic!("commands {:#?}", commands);
-
-        // let skip = commands.iter().any(|c| c == "skip");
 
         Ok(FieldCommands { name, skip, retype })
     }
@@ -297,25 +300,29 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             let mut without_skipped = vec![];
 
                             for field in &fields.named {
-                                let parsed_attrs = field.attrs.iter().filter_map(|attr| {
-                                    if attr.path.is_ident("partial") {
-                                        Some(attr.parse_args::<FieldCommands>())
-                                    } else {
-                                        None
-                                    }
-                                }).collect::<Result<Vec<_>>>();
+                                let parsed_attrs = field
+                                    .attrs
+                                    .iter()
+                                    .filter_map(|attr| {
+                                        if attr.path.is_ident("partial") {
+                                            Some(attr.parse_args::<FieldCommands>())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect::<Result<Vec<_>>>();
 
                                 match parsed_attrs {
                                     Ok(parsed_attrs) => {
-                                        let should_skip = parsed_attrs.iter().any(|parsed| {
-                                            parsed.name == name && parsed.skip
-                                        });
+                                        let should_skip = parsed_attrs
+                                            .iter()
+                                            .any(|parsed| parsed.name == name && parsed.skip);
 
                                         if !should_skip {
                                             without_skipped.push(field);
                                         }
                                     }
-                                    Err(err) => return err.into_compile_error().into()
+                                    Err(err) => return err.into_compile_error().into(),
                                 }
                             }
 
@@ -325,37 +332,43 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             for field in without_skipped {
                                 let mut field = field.to_owned();
 
-                                let retype = match field.attrs.iter().filter_map(|attr| {
-                                    if attr.path.is_ident("partial") {
-                                        // This ideally would be a helpful error message instead
-                                        // of a panic
-                                        let parsed = attr.parse_args::<FieldCommands>();
+                                let retype = match field
+                                    .attrs
+                                    .iter()
+                                    .filter_map(|attr| {
+                                        if attr.path.is_ident("partial") {
+                                            // This ideally would be a helpful error message instead
+                                            // of a panic
+                                            let parsed = attr.parse_args::<FieldCommands>();
 
-                                        match parsed {
-                                            Ok(command) => {
-                                                if command.name == name && command.retype.is_some() {
-                                                    Some(Ok(command.retype.unwrap()))
-                                                } else {
-                                                    None
+                                            match parsed {
+                                                Ok(command) => {
+                                                    if command.name == name
+                                                        && command.retype.is_some()
+                                                    {
+                                                        Some(Ok(command.retype.unwrap()))
+                                                    } else {
+                                                        None
+                                                    }
                                                 }
+                                                Err(err) => Some(Err(err)),
                                             }
-                                            Err(err) => Some(Err(err))
+                                        } else {
+                                            None
                                         }
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Result<Vec<_>>>() {
+                                    })
+                                    .collect::<Result<Vec<_>>>()
+                                {
                                     Ok(mut retypes) => {
                                         if retypes.len() > 1 {
                                             return quote_spanned! {
                                                 input_span => compile_error!("Only a single retype command is allowed")
-                                            }.into()
+                                            }.into();
                                         }
 
                                         retypes.pop()
                                     }
-                                    Err(err) => return err.into_compile_error().into()
+                                    Err(err) => return err.into_compile_error().into(),
                                 };
 
                                 has_retyped_field = has_retyped_field || retype.is_some();
@@ -431,7 +444,8 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                 // Ideally this would return a descriptive error instead of panicking
                 _ => quote_spanned! {
                     input_span => compile_error!("Partial can only be defined on structs");
-                }.into(),
+                }
+                .into(),
             };
 
             result
