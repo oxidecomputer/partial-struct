@@ -1,5 +1,5 @@
 error: Only a single retype command is allowed per field
- --> tests/trybuild/multiple_retype.rs:5:41
-  |
-5 |     #[partial(NewStruct1(retype = bool, retype = u32))]
-  |                                         ^^^^^^
+  --> tests/trybuild/multiple_retype.rs:11:41
+   |
+11 |     #[partial(NewStruct1(retype = bool, retype = u32))]
+   |                                         ^^^^^^

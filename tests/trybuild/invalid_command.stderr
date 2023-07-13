@@ -1,5 +1,5 @@
 error: Unknown command: unknown
- --> tests/trybuild/invalid_command.rs:5:26
-  |
-5 |     #[partial(NewStruct1(unknown))]
-  |                          ^^^^^^^
+  --> tests/trybuild/invalid_command.rs:11:26
+   |
+11 |     #[partial(NewStruct1(unknown))]
+   |                          ^^^^^^^
