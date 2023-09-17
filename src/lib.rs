@@ -10,11 +10,12 @@ extern crate quote;
 
 use proc_macro::TokenStream;
 use proc_macro2::Group;
+use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    DeriveInput, Error, Ident, Result, Token, Type,
+    DeriveInput, Error, Ident, Result, Token, Type, GenericParam, punctuated::Punctuated, WherePredicate, PredicateType,
 };
 
 /// Optional commands that can be define on a per field level. Commands are paired with the
@@ -397,9 +398,38 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                                     .map(|field| field.ident.as_ref())
                                     .collect::<Vec<Option<&Ident>>>();
 
+                                let mut generics_without_bounds = generics.clone();
+                                let predicates = generics_without_bounds.params.iter_mut().filter_map(|p| {
+                                    match p {
+                                        GenericParam::Const(_) => unimplemented!("Const generic params are not supported"),
+                                        GenericParam::Lifetime(_) => unimplemented!("Lifetime generic params are not supported"),
+                                        GenericParam::Type(p) => {
+                                            let predicate = WherePredicate::Type(PredicateType {
+                                                lifetimes: None,
+                                                bounded_ty: Type::Verbatim(p.ident.clone().into_token_stream()),
+                                                colon_token: Token![:](input_span),
+                                                bounds: p.bounds.clone(),
+                                            });
+
+                                            p.bounds = Punctuated::new();
+
+                                            return Some(predicate)
+                                        },
+                                    };
+                                }).collect::<Vec<_>>();
+
+                                {
+                                    let where_clause = generics_without_bounds.make_where_clause();
+                                    for p in predicates {
+                                        where_clause.predicates.push(p);
+                                    }
+                                }
+
+                                let where_clause = &generics_without_bounds.where_clause;
+
                                 quote! {
-                                    impl #generics From<#original_name #generics> for #name #generics {
-                                        fn from(orig: #original_name #generics) -> Self {
+                                    impl #generics_without_bounds From<#original_name #generics_without_bounds> for #name #generics_without_bounds #where_clause {
+                                        fn from(orig: #original_name #generics_without_bounds) -> Self {
                                             Self {
                                                 #( #field_names: orig.#field_names, )*
                                             }

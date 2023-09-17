@@ -16,7 +16,7 @@ fn test_create_new() {
     #[partial(NewStruct1, with(Default), without(Eq))]
     #[partial(NewStruct2)]
     #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
-    pub(crate) struct OldStruct<T> {
+    pub(crate) struct OldStruct<T: Ord> {
         gen: T,
         #[partial(NewStruct1(skip))]
         f1: u8,
