@@ -1,5 +1,0 @@
-error: Partial can only be defined on structs
-  --> tests/trybuild/enum.rs:10:1
-   |
-10 | pub enum OldEnum {
-   | ^^^

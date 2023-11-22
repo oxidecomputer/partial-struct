@@ -15,7 +15,7 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    DeriveInput, Error, Ident, Result, Token, Type, GenericParam, punctuated::Punctuated, WherePredicate, PredicateType,
+    DeriveInput, Error, Ident, Result, Token, Type, GenericParam, punctuated::Punctuated, WherePredicate, PredicateType, Attribute,
 };
 
 /// Optional commands that can be define on a per field level. Commands are paired with the
@@ -101,7 +101,7 @@ impl Parse for DeriveOptions {
 
 /// A parsed out struct that has been requested to be created
 #[derive(Debug)]
-struct NewStruct {
+struct NewItem {
     name: Ident,
 
     // Additional derives that should be added to the struct
@@ -114,11 +114,11 @@ struct NewStruct {
     attributes: Option<proc_macro2::TokenStream>,
 }
 
-impl Parse for NewStruct {
+impl Parse for NewItem {
     fn parse(input: ParseStream) -> Result<Self> {
         let name: Ident = input.parse()?;
 
-        let mut new_struct = NewStruct {
+        let mut new_item = NewItem {
             name,
             with: None,
             without: None,
@@ -136,22 +136,22 @@ impl Parse for NewStruct {
                 let to_add: Group = input.parse()?;
                 let tokens = to_add.stream();
                 let traits: DeriveOptions = syn::parse2(tokens)?;
-                new_struct.with = Some(traits);
+                new_item.with = Some(traits);
             } else if option == "without" {
                 let to_add: Group = input.parse()?;
                 let tokens = to_add.stream();
                 let traits: DeriveOptions = syn::parse2(tokens)?;
-                new_struct.without = Some(traits);
+                new_item.without = Some(traits);
             } else if option == "attributes" {
                 let to_add: Group = input.parse()?;
                 let tokens = to_add.stream();
-                new_struct.attributes = Some(tokens);
+                new_item.attributes = Some(tokens);
             } else {
                 return Err(syn::Error::new(option.span(), "unknown option"));
             }
         }
 
-        Ok(new_struct)
+        Ok(new_item)
     }
 }
 
@@ -238,11 +238,11 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
     let original_name = input.ident;
 
     // Parse the attribute that triggered this macro to execute
-    let first_new_struct = parse_macro_input!(attr as NewStruct);
+    let first_new_item = parse_macro_input!(attr as NewItem);
 
     // Look through the remaining attributes on this struct and find any other instances of the
-    // [partial] macro. For each of those, parse them into their own [NewStruct]
-    let additional_structs: Result<Vec<NewStruct>> = input
+    // [partial] macro. For each of those, parse them into their own [NewItem]
+    let additional_items: Result<Vec<NewItem>> = input
         .attrs
         .iter()
         .filter_map(|attr| {
@@ -254,20 +254,20 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    match additional_structs {
-        Ok(mut additional_structs) => {
+    match additional_items {
+        Ok(mut additional_items) => {
             // Construct the full list of structs that need to be created. This list needs to
             // include the original struct (without modification) as well
-            let mut new_structs = vec![
-                NewStruct {
+            let mut new_items: Vec<NewItem> = vec![
+                NewItem {
                     name: original_name.clone(),
                     with: None,
                     without: None,
                     attributes: None,
                 },
-                first_new_struct,
+                first_new_item,
             ];
-            new_structs.append(&mut additional_structs);
+            new_items.append(&mut additional_items);
 
             let result = match input.data {
                 // This macro is only defined for structs. Usage on any other data type will
@@ -298,13 +298,13 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                     if let syn::Fields::Named(ref fields) = s.fields {
                         // Generate each of the requested structs
-                        for new_struct in new_structs {
-                            let NewStruct {
+                        for new_item in new_items {
+                            let NewItem {
                                 name,
                                 with,
                                 without,
                                 attributes,
-                            } = new_struct;
+                            } = new_item;
 
                             // Generate the list of fields to assign to the new struct
 
@@ -482,6 +482,57 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                     })
                 }
 
+                syn::Data::Enum(ref e) => {
+                    let visibility = input.vis;
+                    let generics = input.generics;
+
+                    let attr_without_partials = get_attr_without_partials(input.attrs.iter());
+                    let container_attrs = get_non_derive_attributes(attr_without_partials);
+                    let orig_derives = get_derive_attribute(input.attrs.iter());
+
+                    // Keep track of all of the enums to output
+                    let mut expanded_enums = vec![];
+
+                    // Generate each of the requested enums
+                    for new_item in new_items {
+                        let NewItem {
+                            name,
+                            with,
+                            without,
+                            attributes,
+                        } = new_item;
+
+                        let derives: Option<syn::Attribute> =
+                            orig_derives.map(|d| d.to_owned());
+
+                        let derive_attr = if let Some(derives) = derives {
+                            // Add in and/or remove the additional derives defined by the caller.
+                            // Adding derives may result in further compilation errors in the
+                            // fields in the original struct are not compatible with the new
+                            // derives
+                            let computed = compute_derives(derives, with, without);
+                            quote! { #computed }
+                        } else {
+                            quote! {}
+                        };
+
+                        let variants = &e.variants;
+
+                        expanded_enums.push(quote! {
+                            #derive_attr
+                            #( #container_attrs )*
+                            #attributes
+                            #visibility enum #name #generics {
+                                #variants
+                            }
+                        });
+                    }
+                    
+                    proc_macro::TokenStream::from(quote! {
+                        #( #expanded_enums )*
+                    })
+                }
+
                 // Ideally this would return a descriptive error instead of panicking
                 _ => quote_spanned! {
                     input_span => compile_error!("Partial can only be defined on structs");
@@ -493,4 +544,24 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
         }
         Err(err) => err.to_compile_error().into(),
     }
+}
+
+// Create the list of all attribute macros that need to be applied to the
+// generated structs
+fn get_attr_without_partials<'a>(attrs: impl Iterator<Item = &'a Attribute>) -> impl Iterator<Item = &'a Attribute> {
+    attrs
+        .filter(|attr| !attr.path.is_ident("partial"))
+}
+
+// From the list of attributes, find all of the non-derive attributes
+fn get_non_derive_attributes<'a>(attrs: impl Iterator<Item = &'a Attribute>) -> Vec<&'a Attribute> {
+    attrs
+        .into_iter()
+        .filter(|attr| !attr.path.is_ident("derive"))
+        .collect()
+}
+
+// Find the derive attribute if one exists
+fn get_derive_attribute<'a>(mut attrs: impl Iterator<Item = &'a Attribute>) -> Option<&'a Attribute> {
+    attrs.find(|attr| attr.path.is_ident("derive"))
 }

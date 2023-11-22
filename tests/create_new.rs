@@ -80,3 +80,14 @@ fn test_empty_structs() {
     #[partial(NewStruct2)]
     pub(crate) struct OldStruct2 {}
 }
+
+
+#[test]
+fn test_basic_enum() {
+    #[partial(NewEnum1)]
+    #[derive(Debug)]
+    pub(crate) enum OldEnum {
+        A,
+        B,
+    }
+}
