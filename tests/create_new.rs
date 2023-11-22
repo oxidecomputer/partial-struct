@@ -13,9 +13,10 @@ fn test_create_new() {
         true
     }
 
-    #[partial(NewStruct1, with(Default), without(Eq))]
-    #[partial(NewStruct2)]
+    #[partial(NewStruct1, with(Default), without(Eq), attributes(#[serde(rename_all = "camelCase")]))]
+    #[partial(NewStruct2, attributes(#[serde(rename_all = "PascalCase")]))]
     #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+    #[doc(hidden)]
     pub(crate) struct OldStruct<T: Ord> {
         gen: T,
         #[partial(NewStruct1(skip))]

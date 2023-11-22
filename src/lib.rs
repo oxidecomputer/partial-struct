@@ -109,6 +109,9 @@ struct NewStruct {
 
     // Derives that should be removed from the new struct (if they exist)
     without: Option<DeriveOptions>,
+
+    // Arbitrary attributes that should be applied to only this variant
+    attributes: Option<proc_macro2::TokenStream>,
 }
 
 impl Parse for NewStruct {
@@ -119,6 +122,7 @@ impl Parse for NewStruct {
             name,
             with: None,
             without: None,
+            attributes: None,
         };
 
         while !input.is_empty() {
@@ -138,6 +142,10 @@ impl Parse for NewStruct {
                 let tokens = to_add.stream();
                 let traits: DeriveOptions = syn::parse2(tokens)?;
                 new_struct.without = Some(traits);
+            } else if option == "attributes" {
+                let to_add: Group = input.parse()?;
+                let tokens = to_add.stream();
+                new_struct.attributes = Some(tokens);
             } else {
                 return Err(syn::Error::new(option.span(), "unknown option"));
             }
@@ -255,6 +263,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                     name: original_name.clone(),
                     with: None,
                     without: None,
+                    attributes: None,
                 },
                 first_new_struct,
             ];
@@ -294,6 +303,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                                 name,
                                 with,
                                 without,
+                                attributes,
                             } = new_struct;
 
                             // Generate the list of fields to assign to the new struct
@@ -457,6 +467,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             expanded_structs.push(quote! {
                                 #derive_attr
                                 #( #struct_attrs )*
+                                #attributes
                                 #visibility struct #name #generics {
                                     #( #filtered_fields, )*
                                 }
