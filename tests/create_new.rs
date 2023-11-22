@@ -81,7 +81,6 @@ fn test_empty_structs() {
     pub(crate) struct OldStruct2 {}
 }
 
-
 #[test]
 fn test_basic_enum() {
     #[partial(NewEnum1)]
@@ -89,5 +88,15 @@ fn test_basic_enum() {
     pub(crate) enum OldEnum {
         A,
         B,
+    }
+}
+
+#[test]
+fn test_tagged_enum() {
+    #[partial(NewEnum1)]
+    #[derive(Debug)]
+    pub(crate) enum OldEnum {
+        A,
+        B(u32),
     }
 }

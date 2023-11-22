@@ -518,6 +518,61 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                         let variants = &e.variants;
 
+                        // If this is not the original struct being generated, create a default
+                        // From impl from the original struct to the new struct.
+                        let from_impl = if name != original_name {
+                            let variant_names = variants
+                                .iter()
+                                .map(|variant| &variant.ident)
+                                .collect::<Vec<_>>();
+
+                            let variant_fields = variants
+                                .iter()
+                                .map(|variant| &variant.fields)
+                                .collect::<Vec<_>>();
+
+                            let mut generics_without_bounds = generics.clone();
+                            let predicates = generics_without_bounds.params.iter_mut().filter_map(|p| {
+                                match p {
+                                    GenericParam::Const(_) => unimplemented!("Const generic params are not supported"),
+                                    GenericParam::Lifetime(_) => unimplemented!("Lifetime generic params are not supported"),
+                                    GenericParam::Type(p) => {
+                                        let predicate = WherePredicate::Type(PredicateType {
+                                            lifetimes: None,
+                                            bounded_ty: Type::Verbatim(p.ident.clone().into_token_stream()),
+                                            colon_token: Token![:](input_span),
+                                            bounds: p.bounds.clone(),
+                                        });
+
+                                        p.bounds = Punctuated::new();
+
+                                        return Some(predicate)
+                                    },
+                                };
+                            }).collect::<Vec<_>>();
+
+                            {
+                                let where_clause = generics_without_bounds.make_where_clause();
+                                for p in predicates {
+                                    where_clause.predicates.push(p);
+                                }
+                            }
+
+                            let where_clause = &generics_without_bounds.where_clause;
+
+                            quote! {
+                                impl #generics_without_bounds From<#original_name #generics_without_bounds> for #name #generics_without_bounds #where_clause {
+                                    fn from(orig: #original_name #generics_without_bounds) -> Self {
+                                        match orig {
+                                            #( #original_name::#variant_names #variant_fields => Self::#variant_names #variant_fields, )*
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            quote! {}
+                        };
+
                         expanded_enums.push(quote! {
                             #derive_attr
                             #( #container_attrs )*
@@ -525,6 +580,8 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             #visibility enum #name #generics {
                                 #variants
                             }
+
+                            #from_impl
                         });
                     }
                     
