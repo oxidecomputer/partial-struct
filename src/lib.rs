@@ -15,7 +15,7 @@ use syn::{
     parse::{Parse, ParseStream},
     parse_macro_input,
     spanned::Spanned,
-    DeriveInput, Error, Ident, Result, Token, Type, GenericParam, punctuated::Punctuated, WherePredicate, PredicateType, Attribute,
+    DeriveInput, Error, Ident, Result, Token, Type, GenericParam, punctuated::Punctuated, WherePredicate, PredicateType, Attribute, Fields,
 };
 
 /// Optional commands that can be define on a per field level. Commands are paired with the
@@ -528,7 +528,14 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                             let variant_fields = variants
                                 .iter()
-                                .map(|variant| &variant.fields)
+                                .map(|variant| match &variant.fields {
+                                    Fields::Named(_) => panic!("Enum partials do not support named fields"),
+                                    Fields::Unnamed(values) => {
+                                        let carriers = values.unnamed.iter().enumerate().map(|(i, _)| format_ident!("arg{}", i)).collect::<Vec<_>>();
+                                        quote!( (#(#carriers,)*) )
+                                    },
+                                    Fields::Unit => quote!()
+                                })
                                 .collect::<Vec<_>>();
 
                             let mut generics_without_bounds = generics.clone();

@@ -98,5 +98,17 @@ fn test_tagged_enum() {
     pub(crate) enum OldEnum {
         A,
         B(u32),
+        C(u32, u64),
+    }
+}
+
+#[test]
+fn test_tagged_generics_enum() {
+    #[partial(NewEnum1)]
+    #[derive(Debug)]
+    pub(crate) enum OldEnum {
+        A,
+        B(u32),
+        C(Vec<bool>),
     }
 }
