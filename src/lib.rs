@@ -568,9 +568,17 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             let where_clause = &generics_without_bounds.where_clause;
 
                             quote! {
+                                impl #generics_without_bounds From<#name #generics_without_bounds> for #original_name #generics_without_bounds #where_clause {
+                                    fn from(value: #name #generics_without_bounds) -> Self {
+                                        match value {
+                                            #( #name::#variant_names #variant_fields => Self::#variant_names #variant_fields, )*
+                                        }
+                                    }
+                                }
+
                                 impl #generics_without_bounds From<#original_name #generics_without_bounds> for #name #generics_without_bounds #where_clause {
-                                    fn from(orig: #original_name #generics_without_bounds) -> Self {
-                                        match orig {
+                                    fn from(value: #original_name #generics_without_bounds) -> Self {
+                                        match value {
                                             #( #original_name::#variant_names #variant_fields => Self::#variant_names #variant_fields, )*
                                         }
                                     }
