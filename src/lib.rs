@@ -12,7 +12,12 @@ use proc_macro::TokenStream;
 use proc_macro2::Group;
 use quote::ToTokens;
 use syn::{
-    parse::{Parse, ParseStream}, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Attribute, DeriveInput, Error, Fields, GenericParam, Ident, Meta, PredicateType, Result, Token, Type, WherePredicate
+    parse::{Parse, ParseStream},
+    parse_macro_input,
+    punctuated::Punctuated,
+    spanned::Spanned,
+    Attribute, DeriveInput, Error, Fields, GenericParam, Ident, Meta, PredicateType, Result, Token,
+    Type, WherePredicate,
 };
 
 /// Optional commands that can be define on a per field level. Commands are paired with the
@@ -194,8 +199,8 @@ fn compute_derives(
             };
 
             list.tokens = stream;
-        },
-        _ => panic!("Expected an attribute list")
+        }
+        _ => panic!("Expected an attribute list"),
     }
 
     attr
@@ -289,8 +294,10 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                         .collect();
 
                     // Find the derive attribute if one exists
-                    let orig_derives: Option<&syn::Attribute> =
-                        input.attrs.iter().find(|attr| attr.path().is_ident("derive"));
+                    let orig_derives: Option<&syn::Attribute> = input
+                        .attrs
+                        .iter()
+                        .find(|attr| attr.path().is_ident("derive"));
 
                     // Keep track of all of the structs to output
                     let mut expanded_structs = vec![];
@@ -408,24 +415,35 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                                     .collect::<Vec<Option<&Ident>>>();
 
                                 let mut generics_without_bounds = generics.clone();
-                                let predicates = generics_without_bounds.params.iter_mut().filter_map(|p| {
-                                    match p {
-                                        GenericParam::Const(_) => unimplemented!("Const generic params are not supported"),
-                                        GenericParam::Lifetime(_) => unimplemented!("Lifetime generic params are not supported"),
-                                        GenericParam::Type(p) => {
-                                            let predicate = WherePredicate::Type(PredicateType {
-                                                lifetimes: None,
-                                                bounded_ty: Type::Verbatim(p.ident.clone().into_token_stream()),
-                                                colon_token: Token![:](input_span),
-                                                bounds: p.bounds.clone(),
-                                            });
+                                let predicates = generics_without_bounds
+                                    .params
+                                    .iter_mut()
+                                    .filter_map(|p| {
+                                        match p {
+                                            GenericParam::Const(_) => unimplemented!(
+                                                "Const generic params are not supported"
+                                            ),
+                                            GenericParam::Lifetime(_) => unimplemented!(
+                                                "Lifetime generic params are not supported"
+                                            ),
+                                            GenericParam::Type(p) => {
+                                                let predicate =
+                                                    WherePredicate::Type(PredicateType {
+                                                        lifetimes: None,
+                                                        bounded_ty: Type::Verbatim(
+                                                            p.ident.clone().into_token_stream(),
+                                                        ),
+                                                        colon_token: Token![:](input_span),
+                                                        bounds: p.bounds.clone(),
+                                                    });
 
-                                            p.bounds = Punctuated::new();
+                                                p.bounds = Punctuated::new();
 
-                                            return Some(predicate)
-                                        },
-                                    };
-                                }).collect::<Vec<_>>();
+                                                return Some(predicate);
+                                            }
+                                        };
+                                    })
+                                    .collect::<Vec<_>>();
 
                                 {
                                     let where_clause = generics_without_bounds.make_where_clause();
@@ -501,8 +519,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             attributes,
                         } = new_item;
 
-                        let derives: Option<syn::Attribute> =
-                            orig_derives.map(|d| d.to_owned());
+                        let derives: Option<syn::Attribute> = orig_derives.map(|d| d.to_owned());
 
                         let derive_attr = if let Some(derives) = derives {
                             // Add in and/or remove the additional derives defined by the caller.
@@ -528,34 +545,51 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             let variant_fields = variants
                                 .iter()
                                 .map(|variant| match &variant.fields {
-                                    Fields::Named(_) => panic!("Enum partials do not support named fields"),
+                                    Fields::Named(_) => {
+                                        panic!("Enum partials do not support named fields")
+                                    }
                                     Fields::Unnamed(values) => {
-                                        let carriers = values.unnamed.iter().enumerate().map(|(i, _)| format_ident!("arg{}", i)).collect::<Vec<_>>();
+                                        let carriers = values
+                                            .unnamed
+                                            .iter()
+                                            .enumerate()
+                                            .map(|(i, _)| format_ident!("arg{}", i))
+                                            .collect::<Vec<_>>();
                                         quote!( (#(#carriers,)*) )
-                                    },
-                                    Fields::Unit => quote!()
+                                    }
+                                    Fields::Unit => quote!(),
                                 })
                                 .collect::<Vec<_>>();
 
                             let mut generics_without_bounds = generics.clone();
-                            let predicates = generics_without_bounds.params.iter_mut().filter_map(|p| {
-                                match p {
-                                    GenericParam::Const(_) => unimplemented!("Const generic params are not supported"),
-                                    GenericParam::Lifetime(_) => unimplemented!("Lifetime generic params are not supported"),
-                                    GenericParam::Type(p) => {
-                                        let predicate = WherePredicate::Type(PredicateType {
-                                            lifetimes: None,
-                                            bounded_ty: Type::Verbatim(p.ident.clone().into_token_stream()),
-                                            colon_token: Token![:](input_span),
-                                            bounds: p.bounds.clone(),
-                                        });
+                            let predicates = generics_without_bounds
+                                .params
+                                .iter_mut()
+                                .filter_map(|p| {
+                                    match p {
+                                        GenericParam::Const(_) => {
+                                            unimplemented!("Const generic params are not supported")
+                                        }
+                                        GenericParam::Lifetime(_) => unimplemented!(
+                                            "Lifetime generic params are not supported"
+                                        ),
+                                        GenericParam::Type(p) => {
+                                            let predicate = WherePredicate::Type(PredicateType {
+                                                lifetimes: None,
+                                                bounded_ty: Type::Verbatim(
+                                                    p.ident.clone().into_token_stream(),
+                                                ),
+                                                colon_token: Token![:](input_span),
+                                                bounds: p.bounds.clone(),
+                                            });
 
-                                        p.bounds = Punctuated::new();
+                                            p.bounds = Punctuated::new();
 
-                                        return Some(predicate)
-                                    },
-                                };
-                            }).collect::<Vec<_>>();
+                                            return Some(predicate);
+                                        }
+                                    };
+                                })
+                                .collect::<Vec<_>>();
 
                             {
                                 let where_clause = generics_without_bounds.make_where_clause();
@@ -621,9 +655,10 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
 
 // Create the list of all attribute macros that need to be applied to the
 // generated structs
-fn get_attr_without_partials<'a>(attrs: impl Iterator<Item = &'a Attribute>) -> impl Iterator<Item = &'a Attribute> {
-    attrs
-        .filter(|attr| !attr.path().is_ident("partial"))
+fn get_attr_without_partials<'a>(
+    attrs: impl Iterator<Item = &'a Attribute>,
+) -> impl Iterator<Item = &'a Attribute> {
+    attrs.filter(|attr| !attr.path().is_ident("partial"))
 }
 
 // From the list of attributes, find all of the non-derive attributes
@@ -635,6 +670,8 @@ fn get_non_derive_attributes<'a>(attrs: impl Iterator<Item = &'a Attribute>) -> 
 }
 
 // Find the derive attribute if one exists
-fn get_derive_attribute<'a>(mut attrs: impl Iterator<Item = &'a Attribute>) -> Option<&'a Attribute> {
+fn get_derive_attribute<'a>(
+    mut attrs: impl Iterator<Item = &'a Attribute>,
+) -> Option<&'a Attribute> {
     attrs.find(|attr| attr.path().is_ident("derive"))
 }
