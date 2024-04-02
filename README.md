@@ -29,7 +29,7 @@ will generate
 
 ```rust
 #[derive(Default)]
-struct NewStruct {
+struct OldStruct {
    a: u32,
    b: u32,
    c: u8,
