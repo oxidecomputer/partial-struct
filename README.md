@@ -28,6 +28,13 @@ struct OldStruct {
 will generate
 
 ```rust
+#[derive(Default)]
+struct NewStruct {
+   a: u32,
+   b: u32,
+   c: u8,
+}
+
 #[derive(Debug)]
 struct NewStruct {
    a: u32,
