@@ -12,10 +12,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Group;
 use quote::ToTokens;
 use syn::{
-    parse::{Parse, ParseStream},
-    parse_macro_input,
-    spanned::Spanned,
-    DeriveInput, Error, Ident, Result, Token, Type, GenericParam, punctuated::Punctuated, WherePredicate, PredicateType, Attribute, Fields,
+    parse::{Parse, ParseStream}, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Attribute, DeriveInput, Error, Fields, GenericParam, Ident, Meta, PredicateType, Result, Token, Type, WherePredicate
 };
 
 /// Optional commands that can be define on a per field level. Commands are paired with the
@@ -162,14 +159,11 @@ struct Derives {
 
 impl Parse for Derives {
     fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        syn::parenthesized!(content in input);
-
         let mut derives: Vec<Ident> = vec![];
 
-        while !content.is_empty() {
-            let derive: Ident = content.parse()?;
-            let _: Result<Token![,]> = content.parse();
+        while !input.is_empty() {
+            let derive: Ident = input.parse()?;
+            let _: Result<Token![,]> = input.parse();
 
             derives.push(derive);
         }
@@ -183,22 +177,26 @@ fn compute_derives(
     with: Option<DeriveOptions>,
     without: Option<DeriveOptions>,
 ) -> syn::Attribute {
-    let derives: Result<Derives> = syn::parse2(attr.tokens);
-    let mut derive_list = derives.map(|d| d.derives).unwrap_or_else(|_| vec![]);
+    match &mut attr.meta {
+        Meta::List(list) => {
+            let derives: Result<Derives> = syn::parse2(list.tokens.clone());
+            let mut derive_list = derives.map(|d| d.derives).unwrap_or_else(|_| vec![]);
+            if let Some(mut with) = with {
+                derive_list.append(&mut with.traits);
+            }
 
-    if let Some(mut with) = with {
-        derive_list.append(&mut with.traits);
+            if let Some(without) = without {
+                derive_list.retain(|item| !without.traits.contains(item));
+            }
+
+            let stream = quote! {
+                #( #derive_list ),*
+            };
+
+            list.tokens = stream;
+        },
+        _ => panic!("Expected an attribute list")
     }
-
-    if let Some(without) = without {
-        derive_list.retain(|item| !without.traits.contains(item));
-    }
-
-    let stream = quote! {
-        (#( #derive_list ),*)
-    };
-
-    attr.tokens = stream;
 
     attr
 }
@@ -246,7 +244,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
         .attrs
         .iter()
         .filter_map(|attr| {
-            if attr.path.is_ident("partial") {
+            if attr.path().is_ident("partial") {
                 Some(attr.parse_args())
             } else {
                 None
@@ -262,6 +260,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                 NewItem {
                     name: original_name.clone(),
                     with: None,
+
                     without: None,
                     attributes: None,
                 },
@@ -281,17 +280,17 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                     let attr_without_partials = input
                         .attrs
                         .iter()
-                        .filter(|attr| !attr.path.is_ident("partial"));
+                        .filter(|attr| !attr.path().is_ident("partial"));
 
                     // From the list of attributes, find all of the non-derive attributes
                     let struct_attrs: Vec<&syn::Attribute> = attr_without_partials
                         .into_iter()
-                        .filter(|attr| !attr.path.is_ident("derive"))
+                        .filter(|attr| !attr.path().is_ident("derive"))
                         .collect();
 
                     // Find the derive attribute if one exists
                     let orig_derives: Option<&syn::Attribute> =
-                        input.attrs.iter().find(|attr| attr.path.is_ident("derive"));
+                        input.attrs.iter().find(|attr| attr.path().is_ident("derive"));
 
                     // Keep track of all of the structs to output
                     let mut expanded_structs = vec![];
@@ -315,7 +314,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                                     .attrs
                                     .iter()
                                     .filter_map(|attr| {
-                                        if attr.path.is_ident("partial") {
+                                        if attr.path().is_ident("partial") {
                                             Some(attr.parse_args::<FieldCommands>())
                                         } else {
                                             None
@@ -347,7 +346,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                                     .attrs
                                     .iter()
                                     .filter_map(|attr| {
-                                        if attr.path.is_ident("partial") {
+                                        if attr.path().is_ident("partial") {
                                             // This ideally would be a helpful error message instead
                                             // of a panic
                                             let parsed = attr.parse_args::<FieldCommands>();
@@ -392,7 +391,7 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                                 field.attrs = field
                                     .attrs
                                     .into_iter()
-                                    .filter(|attr| !attr.path.is_ident("partial"))
+                                    .filter(|attr| !attr.path().is_ident("partial"))
                                     .collect();
 
                                 new_fields.push(field);
@@ -599,7 +598,9 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
                             #from_impl
                         });
                     }
-                    
+
+                    // panic!("{:#?}", expanded_enums);
+
                     proc_macro::TokenStream::from(quote! {
                         #( #expanded_enums )*
                     })
@@ -622,18 +623,18 @@ pub fn partial(attr: TokenStream, input: TokenStream) -> TokenStream {
 // generated structs
 fn get_attr_without_partials<'a>(attrs: impl Iterator<Item = &'a Attribute>) -> impl Iterator<Item = &'a Attribute> {
     attrs
-        .filter(|attr| !attr.path.is_ident("partial"))
+        .filter(|attr| !attr.path().is_ident("partial"))
 }
 
 // From the list of attributes, find all of the non-derive attributes
 fn get_non_derive_attributes<'a>(attrs: impl Iterator<Item = &'a Attribute>) -> Vec<&'a Attribute> {
     attrs
         .into_iter()
-        .filter(|attr| !attr.path.is_ident("derive"))
+        .filter(|attr| !attr.path().is_ident("derive"))
         .collect()
 }
 
 // Find the derive attribute if one exists
 fn get_derive_attribute<'a>(mut attrs: impl Iterator<Item = &'a Attribute>) -> Option<&'a Attribute> {
-    attrs.find(|attr| attr.path.is_ident("derive"))
+    attrs.find(|attr| attr.path().is_ident("derive"))
 }

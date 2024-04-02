@@ -10,7 +10,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "1.0", features = ["extra-traits", "derive"] }
+syn = { version = "2", features = ["extra-traits", "derive"] }
 
 [dev-dependencies]
 rustversion = "1.0.13"
